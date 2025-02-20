@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from models import RefreshToken
 from schemas import MalariaReportCreate, MalariaRiskResponse
 from fastapi.middleware.cors import CORSMiddleware
+from models import MalariaReport
 import re
 
 
