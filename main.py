@@ -278,7 +278,7 @@ def get_current_user_info(
     db: Session = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
-    """Fetches basic information about the currently authenticated user."""
+   
     if not current_user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -286,6 +286,7 @@ def get_current_user_info(
         id=current_user.id,
         name=current_user.name,
         email=current_user.email,
+        created_at=current_user.created_at,git 
         latitude=current_user.latitude,
         longitude=current_user.longitude
     )
