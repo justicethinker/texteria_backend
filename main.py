@@ -286,7 +286,7 @@ def get_current_user_info(
         id=current_user.id,
         name=current_user.name,
         email=current_user.email,
-        created_at=current_user.created_at,git 
+        created_at=current_user.created_at,
         latitude=current_user.latitude,
         longitude=current_user.longitude
     )
