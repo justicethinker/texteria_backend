@@ -19,6 +19,8 @@ from models import RefreshToken
 from schemas import MalariaReportCreate, MalariaRiskResponse
 from fastapi.middleware.cors import CORSMiddleware
 from models import MalariaReport
+import requests
+import os
 import re
 
 
@@ -252,6 +254,29 @@ def update_location(
 
     return {"message": "Location updated automatically"}
 
+@app.get("/user-location/")
+def get_user_location(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if not current_user.latitude or not current_user.longitude:
+        raise HTTPException(status_code=404, detail="Location not set for this user")
+
+    return {
+        "latitude": current_user.latitude,
+        "longitude": current_user.longitude
+    }
+
+
+GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
+
+@app.get("/reverse-geocode/")
+def reverse_geocode(latitude: float, longitude: float):
+    url = f"https://maps.googleapis.com/maps/api/geocode/json?latlng={latitude},{longitude}&key={GOOGLE_MAPS_API_KEY}"
+    response = requests.get(url)
+    return response.json()
+
+@app.get("/me/", response_model=UserResponse)
+def get_current_user_info(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Fetches basic information about the currently authenticated user."""
+    return current_user  
 
 @app.get("/")
 def read_root():
