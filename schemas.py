@@ -1,13 +1,15 @@
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
+from typing import Optional
 import re
 
 class UserCreate(BaseModel):
     name: str = Field(..., min_length=3, max_length=50, pattern="^[A-Za-z ]+$")
     email: EmailStr  
     password: str = Field(..., min_length=6, max_length=100)  
-    latitude: float  
-    longitude: float 
+    latitude: Optional[float] = None 
+    longitude: Optional[float] = None 
+   
 
 
     @classmethod
@@ -25,6 +27,8 @@ class UserResponse(BaseModel):
     name: str
     email: EmailStr
     created_at: datetime
+    latitude : Optional[float] = None
+    longitude: Optional[float] = None
 
     class Config:
         orm_mode = True
