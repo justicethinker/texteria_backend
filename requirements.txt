@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+gunicorn
+psycopg2
+pydantic
+python-dotenv
+authlib
+alembic
+pyjwt
+fastapi[all]
