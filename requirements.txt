@@ -3,6 +3,7 @@ uvicorn
 gunicorn
 psycopg2
 pydantic
+passlib[bcrypt]
 python-dotenv
 authlib
 alembic
