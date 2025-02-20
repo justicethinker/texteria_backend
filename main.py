@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import Request
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine, Base
 from models import User
@@ -167,7 +168,7 @@ def get_malaria_risk_map(db: Session = Depends(get_db), current_user: User = Dep
     for report in nearby_reports:
         total_cases = report.cases_reported
 
-        # Assign risk color based on number of cases
+       
         if total_cases > 20:
             risk_level = "high"
             color = "red"
@@ -219,6 +220,32 @@ def report_malaria(report: MalariaReportCreate, db: Session = Depends(get_db), c
     return {"message": "Malaria report submitted successfully"}
 
 
+
+@app.put("/update-location/")
+def update_location(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if not current_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    
+    data = request.json()
+    latitude = data.get("latitude")
+    longitude = data.get("longitude")
+
+    if latitude is None or longitude is None:
+        raise HTTPException(status_code=400, detail="Latitude and Longitude are required")
+
+    current_user.latitude = latitude
+    current_user.longitude = longitude
+    db.commit()
+    db.refresh(current_user)
+
+    return {"message": "Location updated automatically"}
+
+
 @app.get("/")
 def read_root():
     return {"message": "MedInnovate API is running"}
@@ -226,3 +253,4 @@ def read_root():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
