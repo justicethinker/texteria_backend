@@ -86,12 +86,19 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Email already registered")
 
     hashed_password = hash_password(user.password)
-    new_user = User(name=user.name, email=user.email, password=hashed_password, latitude=user.latitude, longitude=user.longitude)
+    new_user = User(
+        name=user.name,
+        email=user.email,
+        password=hashed_password,
+        latitude=user.latitude,  
+        longitude=user.longitude  
+    )
 
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
     return new_user
+
 
 
 @app.get("/users/{user_id}", response_model=List[UserResponse])
