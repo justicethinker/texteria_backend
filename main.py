@@ -274,9 +274,22 @@ def reverse_geocode(latitude: float, longitude: float):
     return response.json()
 
 @app.get("/me/", response_model=UserResponse)
-def get_current_user_info(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_current_user_info(
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
     """Fetches basic information about the currently authenticated user."""
-    return current_user  
+    if not current_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return UserResponse(
+        id=current_user.id,
+        name=current_user.name,
+        email=current_user.email,
+        latitude=current_user.latitude,
+        longitude=current_user.longitude
+    )
+
 
 @app.get("/")
 def read_root():
