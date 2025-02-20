@@ -16,12 +16,34 @@ from auth import verify_refresh_token
 from pydantic import BaseModel
 from models import RefreshToken
 from schemas import MalariaReportCreate, MalariaRiskResponse
+from fastapi.middleware.cors import CORSMiddleware
 import re
 
 
 app = FastAPI()
 
 Base.metadata.create_all(bind=engine)
+
+
+
+origins = [
+    "http://localhost:5173", 
+    "https://tectaria-backend.onrender.com"  
+]
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins, 
+    allow_credentials=True,
+    allow_methods=["*"],  
+    allow_headers=["*"],  
+)
+
+@app.get("/auth/me")
+async def auth_me():
+    return {"message": "CORS is working!"}
+
 
 
 def get_db():
