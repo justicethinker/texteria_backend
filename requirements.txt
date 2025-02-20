@@ -10,3 +10,4 @@ alembic
 pyjwt
 fastapi[all]
 python-jose[cryptography]
+requests
