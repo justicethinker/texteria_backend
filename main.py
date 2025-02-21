@@ -169,56 +169,41 @@ def get_malaria_risk(db: Session = Depends(get_db), current_user: User = Depends
 
     return {"risk_level": risk_level, "color": color}
 
+import requests
+
+AI_API_URL = "https://2949bcd3-2f94-4f33-8fd2-848fe9144150-00-2clainn87cmnh.spock.replit.dev/"  
+
 @app.get("/malaria-risk-map/")
 def get_malaria_risk_map(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if not current_user.latitude or not current_user.longitude:
         raise HTTPException(status_code=400, detail="Location data is missing for this user")
 
     
-    nearby_reports = db.query(MalariaReport).filter(
-        (MalariaReport.latitude.between(current_user.latitude - 0.5, current_user.latitude + 0.5)) &
-        (MalariaReport.longitude.between(current_user.longitude - 0.5, current_user.longitude + 0.5))
-    ).all()
+    ai_response = requests.post(AI_API_URL, json={
+        "latitude": current_user.latitude,
+        "longitude": current_user.longitude
+    })
 
-    risk_data = []
-    for report in nearby_reports:
-        total_cases = report.cases_reported
+    if ai_response.status_code != 200:
+        raise HTTPException(status_code=500, detail="Failed to fetch risk analysis from AI")
 
-       
-        if total_cases > 20:
-            risk_level = "high"
-            color = "red"
-        elif total_cases > 5:
-            risk_level = "moderate"
-            color = "yellow"
-        else:
-            risk_level = "low"
-            color = "green"
+    ai_data = ai_response.json()  
 
-       
-        url = f"https://revgeocode.search.hereapi.com/v1/revgeocode?at={report.latitude},{report.longitude}&apiKey={HERE_API_KEY}"
-        response = requests.get(url)
+    
+    risk_color_map = {
+        "High": "red",
+        "Medium": "yellow",
+        "Low": "green"
+    }
+    risk_level = ai_data["risk_level"]
+    color = risk_color_map.get(risk_level, "gray")  
 
-        if response.status_code == 200:
-            data = response.json()
-            if "items" in data and len(data["items"]) > 0:
-                location_name = data["items"][0]["address"].get("label", "Unknown Location")
-            else:
-                location_name = "Unknown Location"
-        else:
-            location_name = "Unknown Location"
-
-        
-        risk_data.append({
-            "latitude": report.latitude,
-            "longitude": report.longitude,
-            "risk_level": risk_level,
-            "color": color,
-            "location_name": location_name 
-        })
-
-    return {"risk_zones": risk_data}
-
+    return {
+        "latitude": current_user.latitude,
+        "longitude": current_user.longitude,
+        "risk_level": risk_level,
+        "color": color
+    }
 
 @app.post("/refresh/")
 def refresh_token(request: TokenRefreshRequest, db: Session = Depends(get_db)):
@@ -234,23 +219,47 @@ def logout(request: TokenRefreshRequest, db: Session = Depends(get_db)):
 
 
 @app.post("/report-malaria/")
-def report_malaria(report: MalariaReportCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def report_malaria(
+    report: MalariaReportCreate, 
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
     if not current_user.latitude or not current_user.longitude:
         raise HTTPException(status_code=400, detail="Location data is missing for this user")
 
+   
+    url = f"https://revgeocode.search.hereapi.com/v1/revgeocode?at={current_user.latitude},{current_user.longitude}&apiKey={HERE_API_KEY}"
+    response = requests.get(url)
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=500, detail="Failed to fetch location details")
+
+    data = response.json()
+
+    if "items" not in data or not data["items"]:
+        raise HTTPException(status_code=404, detail="Location details not found")
+
+    address = data["items"][0]["address"].get("label", "Unknown Location")
+
+   
     new_report = MalariaReport(
         user_id=current_user.id,
         latitude=current_user.latitude,  
         longitude=current_user.longitude,
-        cases_reported=report.cases_reported
+        address=address, 
+        cases_reported=report.cases_reported,
+        risk_level=report.risk_level  
     )
 
     db.add(new_report)
     db.commit()
     db.refresh(new_report)
 
-    return {"message": "Malaria report submitted successfully"}
-
+    return {
+        "message": "Malaria report submitted successfully",
+        "location": address,
+        "risk_level": report.risk_level
+    }
 
 
 @app.put("/update-location/")
