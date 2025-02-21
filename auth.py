@@ -4,7 +4,10 @@ from passlib.context import CryptContext
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from models import RefreshToken 
+from database import get_db 
+from models import RefreshToken  
+from models import User 
+
 
 SECRET_KEY = "50146eb35c7eaa52ed8d87918073b68bc5ae0496cd5964cff4d2b32f0ae8b5a0"
 REFRESH_SECRET_KEY = "61257fc46d8fbb63fe9e98029184c79cd6bf1507de6075dgg5e3c43g1bf9cb1"
