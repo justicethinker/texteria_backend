@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
 from typing import Optional
+from typing import Literal
 import re
 
 class UserCreate(BaseModel):
@@ -35,9 +36,10 @@ class UserResponse(BaseModel):
 
 
 class MalariaReportCreate(BaseModel):
-    latitude: float
-    longitude: float
-    cases_reported: int
+    name: str  
+    cases_reported: int = Field(gt=0, description="Number of malaria cases reported")
+    risk_level: Literal["high", "medium", "low"] 
+
 
 class MalariaRiskResponse(BaseModel):
     risk_level: str
