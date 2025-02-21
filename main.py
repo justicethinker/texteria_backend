@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, APIRouter, HTTPException, status
 from fastapi import Request
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine, Base
@@ -19,6 +19,7 @@ from models import RefreshToken
 from schemas import MalariaReportCreate, MalariaRiskResponse
 from fastapi.middleware.cors import CORSMiddleware
 from models import MalariaReport
+from dotenv import load_dotenv
 import requests
 import os
 import re
@@ -27,6 +28,13 @@ import re
 app = FastAPI()
 
 Base.metadata.create_all(bind=engine)
+
+load_dotenv()
+
+HERE_API_KEY = os.getenv("HERE_API_KEY")
+
+if not HERE_API_KEY:
+    raise ValueError("HERE_API_KEY is missing! Add it to your .env file or environment variables.")
 
 
 
@@ -166,13 +174,12 @@ def get_malaria_risk_map(db: Session = Depends(get_db), current_user: User = Dep
     if not current_user.latitude or not current_user.longitude:
         raise HTTPException(status_code=400, detail="Location data is missing for this user")
 
-   
+    
     nearby_reports = db.query(MalariaReport).filter(
         (MalariaReport.latitude.between(current_user.latitude - 0.5, current_user.latitude + 0.5)) &
         (MalariaReport.longitude.between(current_user.longitude - 0.5, current_user.longitude + 0.5))
     ).all()
 
-  
     risk_data = []
     for report in nearby_reports:
         total_cases = report.cases_reported
@@ -188,14 +195,30 @@ def get_malaria_risk_map(db: Session = Depends(get_db), current_user: User = Dep
             risk_level = "low"
             color = "green"
 
+       
+        url = f"https://revgeocode.search.hereapi.com/v1/revgeocode?at={report.latitude},{report.longitude}&apiKey={HERE_API_KEY}"
+        response = requests.get(url)
+
+        if response.status_code == 200:
+            data = response.json()
+            if "items" in data and len(data["items"]) > 0:
+                location_name = data["items"][0]["address"].get("label", "Unknown Location")
+            else:
+                location_name = "Unknown Location"
+        else:
+            location_name = "Unknown Location"
+
+        
         risk_data.append({
             "latitude": report.latitude,
             "longitude": report.longitude,
             "risk_level": risk_level,
-            "color": color
+            "color": color,
+            "location_name": location_name 
         })
 
     return {"risk_zones": risk_data}
+
 
 @app.post("/refresh/")
 def refresh_token(request: TokenRefreshRequest, db: Session = Depends(get_db)):
@@ -231,7 +254,7 @@ def report_malaria(report: MalariaReportCreate, db: Session = Depends(get_db), c
 
 
 @app.put("/update-location/")
-def update_location(
+async def update_location(
     request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -239,39 +262,105 @@ def update_location(
     if not current_user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    
-    data = request.json()
+    data = await request.json()
     latitude = data.get("latitude")
     longitude = data.get("longitude")
 
     if latitude is None or longitude is None:
         raise HTTPException(status_code=400, detail="Latitude and Longitude are required")
 
-    current_user.latitude = latitude
-    current_user.longitude = longitude
+    
+    db_user = db.query(User).filter(User.id == current_user.id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found in database")
+
+   
+    url = f"https://revgeocode.search.hereapi.com/v1/revgeocode?at={latitude},{longitude}&apiKey={HERE_API_KEY}"
+    response = requests.get(url)
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=500, detail="Failed to fetch location details")
+
+    data = response.json()
+
+    if "items" not in data or not data["items"]:
+        raise HTTPException(status_code=404, detail="Location details not found")
+
+    address_details = data["items"][0]["address"]
+    full_address = address_details.get("label", "Unknown Location")
+
+   
+    db_user.latitude = latitude
+    db_user.longitude = longitude
+    db_user.address = full_address  
+
     db.commit()
-    db.refresh(current_user)
-
-    return {"message": "Location updated automatically"}
-
-@app.get("/user-location/")
-def get_user_location(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if not current_user.latitude or not current_user.longitude:
-        raise HTTPException(status_code=404, detail="Location not set for this user")
+    db.refresh(db_user) 
 
     return {
-        "latitude": current_user.latitude,
-        "longitude": current_user.longitude
+        "message": "Location updated automatically",
+        "latitude": latitude,
+        "longitude": longitude,
+        "address": full_address
     }
 
 
-GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
+@app.get("/me/")
+def get_current_user_info(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if not current_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not current_user.latitude or not current_user.longitude:
+        raise HTTPException(status_code=400, detail="Location data is missing for this user")
+
+  
+    url = f"https://revgeocode.search.hereapi.com/v1/revgeocode?at={current_user.latitude},{current_user.longitude}&apiKey={HERE_API_KEY}"
+    response = requests.get(url)
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=500, detail="Failed to fetch location details")
+
+    data = response.json()
+
+    if "items" not in data or not data["items"]:
+        raise HTTPException(status_code=404, detail="Location details not found")
+
+    address_details = data["items"][0]["address"]
+
+    return {
+        "id": current_user.id,
+        "name": current_user.name,
+        "email": current_user.email,
+        "latitude": current_user.latitude,
+        "longitude": current_user.longitude,
+        "address": address_details.get("label", "Unknown Location"), 
+        "city": address_details.get("city", "Unknown City"),
+        "state": address_details.get("state", "Unknown State"),
+        "country": address_details.get("countryName", "Unknown Country")
+    }
+
+
+
 
 @app.get("/reverse-geocode/")
 def reverse_geocode(latitude: float, longitude: float):
-    url = f"https://maps.googleapis.com/maps/api/geocode/json?latlng={latitude},{longitude}&key={GOOGLE_MAPS_API_KEY}"
+    if not HERE_API_KEY:
+        raise HTTPException(status_code=500, detail="HERE Maps API key is missing")
+
+    url = f"https://revgeocode.search.hereapi.com/v1/revgeocode?at={latitude},{longitude}&apiKey={HERE_API_KEY}"
+
     response = requests.get(url)
-    return response.json()
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=500, detail="Failed to fetch location data")
+
+    data = response.json()
+
+    if "items" not in data or not data["items"]:
+        raise HTTPException(status_code=404, detail="Location not found")
+
+    return {"address": data["items"][0]["address"]["label"]}
+
 
 @app.get("/me/", response_model=UserResponse)
 def get_current_user_info(
