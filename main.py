@@ -40,7 +40,8 @@ if not HERE_API_KEY:
 
 origins = [
     "http://localhost:5173", 
-    "https://tectaria-backend.onrender.com"  
+    "https://tectaria-backend.onrender.com"
+     "https://stunning-cod-7664645q4x42rpwg-5173.app.github.dev"  
 ]
 
 
@@ -96,12 +97,24 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Email already registered")
 
     hashed_password = hash_password(user.password)
+    
+    
+    full_address = "Unknown Location"
+    if user.latitude and user.longitude:
+        url = f"https://revgeocode.search.hereapi.com/v1/revgeocode?at={user.latitude},{user.longitude}&apiKey={HERE_API_KEY}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            if "items" in data and data["items"]:
+                full_address = data["items"][0]["address"].get("label", "Unknown Location")
+
     new_user = User(
         name=user.name,
         email=user.email,
         password=hashed_password,
         latitude=user.latitude,  
-        longitude=user.longitude  
+        longitude=user.longitude,
+        address=full_address  
     )
 
     db.add(new_user)
@@ -169,9 +182,8 @@ def get_malaria_risk(db: Session = Depends(get_db), current_user: User = Depends
 
     return {"risk_level": risk_level, "color": color}
 
-import requests
 
-AI_API_URL = "https://2949bcd3-2f94-4f33-8fd2-848fe9144150-00-2clainn87cmnh.spock.replit.dev/"  
+AI_API_URL = "https://2949bcd3-2f94-4f33-8fd2-848fe9144150-00-2clainn87cmnh.spock.replit.dev/"
 
 @app.get("/malaria-risk-map/")
 def get_malaria_risk_map(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -196,7 +208,7 @@ def get_malaria_risk_map(db: Session = Depends(get_db), current_user: User = Dep
         "Low": "green"
     }
     risk_level = ai_data["risk_level"]
-    color = risk_color_map.get(risk_level, "gray")  
+    color = risk_color_map.get(risk_level, "gray")  # Default to gray if unknown
 
     return {
         "latitude": current_user.latitude,
@@ -278,33 +290,23 @@ async def update_location(
     if latitude is None or longitude is None:
         raise HTTPException(status_code=400, detail="Latitude and Longitude are required")
 
-    
-    db_user = db.query(User).filter(User.id == current_user.id).first()
-    if not db_user:
-        raise HTTPException(status_code=404, detail="User not found in database")
-
    
     url = f"https://revgeocode.search.hereapi.com/v1/revgeocode?at={latitude},{longitude}&apiKey={HERE_API_KEY}"
     response = requests.get(url)
+    full_address = "Unknown Location"
 
-    if response.status_code != 200:
-        raise HTTPException(status_code=500, detail="Failed to fetch location details")
-
-    data = response.json()
-
-    if "items" not in data or not data["items"]:
-        raise HTTPException(status_code=404, detail="Location details not found")
-
-    address_details = data["items"][0]["address"]
-    full_address = address_details.get("label", "Unknown Location")
+    if response.status_code == 200:
+        data = response.json()
+        if "items" in data and data["items"]:
+            full_address = data["items"][0]["address"].get("label", "Unknown Location")
 
    
-    db_user.latitude = latitude
-    db_user.longitude = longitude
-    db_user.address = full_address  
+    current_user.latitude = latitude
+    current_user.longitude = longitude
+    current_user.address = full_address  
 
     db.commit()
-    db.refresh(db_user) 
+    db.refresh(current_user) 
 
     return {
         "message": "Location updated automatically",
