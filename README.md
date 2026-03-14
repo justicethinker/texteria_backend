@@ -6,7 +6,7 @@
 ![Database](https://img.shields.io/badge/ORM-SQLAlchemy-red)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-## The Elevator Pitch
+## About
 Texteria is a robust backend infrastructure designed specifically for tracking, managing, and analyzing malaria cases. By providing secure API endpoints for data collection, authentication, and seamless database management, this service supports healthcare initiatives in monitoring and combating the spread of the disease efficiently.
 
 ## Features
